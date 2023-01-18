@@ -2,7 +2,7 @@ import datetime
 import json
 import os
 import sys
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -177,6 +177,29 @@ class CompletedActivityMismatch(Exception):
     ...
 
 
+def js_isodate(d: datetime.datetime) -> str:
+    return f"{d.isoformat()}Z"
+
+
+def save_aggregated_data(activities: Activities, history: History, dir: Path) -> None:
+    path = dir / "aggregated_data.json"
+
+    data = {
+        "date": js_isodate(datetime.datetime.now()),
+        "activities": [asdict(activity) for activity in activities],
+        "completedActivities": [
+            {
+                **asdict(completed_activity),
+                "date": js_isodate(completed_activity.date),
+            }
+            for completed_activity in history
+        ],
+    }
+
+    with path.open("w") as f:
+        json.dump(data, fp=f, indent=2)
+
+
 def aggregate_data_from_files(paths: list[Path]) -> tuple[Activities, History]:
     activities_by_id: dict[ActivityId, Activity] = {}
     history_by_id: dict[CompletedActivityId, CompletedActivity] = {}
@@ -220,8 +243,11 @@ def aggregate_data_from_files(paths: list[Path]) -> tuple[Activities, History]:
             else:
                 history_by_id[completed_activity_id] = completed_activity
 
-    activities = list(activities_by_id.values())
-    history = list(history_by_id.values())
+    activities = sorted(activities_by_id.values(), key=lambda a: a.name)
+    history = sorted(history_by_id.values(), key=lambda ca: ca.date)
+
+    save_aggregated_data(activities=activities, history=history, dir=path.parent)
+
     return activities, history
 
 
