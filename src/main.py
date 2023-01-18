@@ -59,6 +59,10 @@ class CompletedActivity:
     notes: str
 
 
+Activities = list[Activity]
+History = list[CompletedActivity]
+
+
 def cast_activity(raw: RawActivity) -> Activity:
     return Activity(id=raw["id"], name=raw["name"], other_names=raw["otherNames"])
 
@@ -141,10 +145,7 @@ def compute_data_grid(
     return data
 
 
-def extract_data_from_file(
-    path: Path,
-) -> tuple[list[Activity], list[CompletedActivity]]:
-
+def extract_data_from_file(path: Path) -> tuple[Activities, History]:
     with path.open("r") as f:
         data: FitnessJsonData = json.load(f)
 
@@ -157,9 +158,76 @@ def extract_data_from_file(
     return activities, history
 
 
+# TODO: add support for CSV files
+def find_json_files(dir: Path) -> list[Path]:
+    all_json_paths = sorted(
+        path
+        for path in dir.glob("*.json")
+        if path.name.startswith("fitness-tracker__backup_")
+    )
+
+    return all_json_paths
+
+
+class ActivityMismatch(Exception):
+    ...
+
+
+class CompletedActivityMismatch(Exception):
+    ...
+
+
+def aggregate_data_from_files(paths: list[Path]) -> tuple[Activities, History]:
+    activities_by_id: dict[ActivityId, Activity] = {}
+    history_by_id: dict[CompletedActivityId, CompletedActivity] = {}
+    for path in paths:
+        print(path.name)
+        file_activities, file_history = extract_data_from_file(path=path)
+
+        # aggregate activities and report collisions
+        for activity in file_activities:
+            activity_id = activity.id
+            if existing_activity := activities_by_id.get(activity_id):
+                if existing_activity != activity:
+                    raise ActivityMismatch(
+                        "Different activities have the same ID:\n"
+                        "existing_activity:\n"
+                        f"{existing_activity}\n"
+                        "\n"
+                        "activity:\n"
+                        f"{activity}\n"
+                    )
+                else:
+                    continue
+            else:
+                activities_by_id[activity_id] = activity
+
+        # aggregate completed activities and report collisions
+        for completed_activity in file_history:
+            completed_activity_id = completed_activity.id
+            if existing_completed_activity := history_by_id.get(completed_activity_id):
+                if existing_completed_activity != completed_activity:
+                    raise CompletedActivityMismatch(
+                        "Different completed activities have the same ID:\n"
+                        "existing_activity:\n"
+                        f"{existing_completed_activity}\n"
+                        "\n"
+                        "activity:\n"
+                        f"{completed_activity}\n"
+                    )
+                else:
+                    continue
+            else:
+                history_by_id[completed_activity_id] = completed_activity
+
+    activities = list(activities_by_id.values())
+    history = list(history_by_id.values())
+    return activities, history
+
+
 def read_data(dir: Path) -> tuple[list[ActivityName], list[str], Any]:
-    path = dir / "fitness-tracker__backup_20221221-071322.json"  # TODO
-    activities, history = extract_data_from_file(path=path)
+    json_files = find_json_files(dir=dir)
+    activities, history = aggregate_data_from_files(paths=json_files)
 
     activity_index = {activity.id: activity.name for activity in activities}
 
@@ -214,7 +282,7 @@ def _plot(data: Any, output_path: Path) -> None:
             text = ax.text(j, i, harvest[i, j], ha="center", va="center", color="w")
 
     fig.tight_layout()
-    fig.set_size_inches(10.5, 18.5)
+    fig.set_size_inches(15, 18)
     fig.savefig(output_path)
 
 
