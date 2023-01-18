@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 import sys
+import webbrowser
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, TypedDict
@@ -314,8 +315,10 @@ def _plot(data: Any, output_path: Path) -> None:
             text = ax.text(j, i, value_text, ha="center", va="center", color="w")
 
     fig.tight_layout()
-    fig.set_size_inches(15, 18)
+    fig.set_size_inches(18, 18)
     fig.savefig(output_path)
+
+    webbrowser.open(f"file://{output_path.absolute()}", new=0)
 
 
 def main() -> None | str:
