@@ -1,0 +1,87 @@
+default_stages: [commit]
+fail_fast: true
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.3.0
+    hooks:
+      - id: trailing-whitespace
+        stages: [commit]
+      - id: end-of-file-fixer
+        stages: [commit]
+
+  # python
+  - repo: https://github.com/pycqa/flake8
+    rev: 4.0.1
+    hooks:
+      - id: flake8
+        files: '^api/.*\.py'
+        args: [--config, setup.cfg]
+  # - repo: https://github.com/PyCQA/isort  # started failing on 2022-07-20
+  #   rev: 5.10.1
+  #   hooks:
+  #     - id: isort
+  #       files: '^api/.*\.py'
+  #       args: [setup.cfg]
+  - repo: https://github.com/psf/black
+    rev: 22.6.0
+    hooks:
+      - id: black
+        files: '^tools/.*\.py'
+
+  - repo: local
+    hooks:
+      - id: ledger-run-journal-balance-assertions
+        name: "ledger: run journal balance assertions"
+        language: system
+        entry: scripts/journal-assertions-pass.sh
+        files: '^journals/.*ledger'
+
+      - id: ledger-report-entries-without-assertions
+        name: "ledger: find entries without journal assertions"
+        language: system
+        entry: python -m tools.cli.find_last_checkpoint --do-not-fail
+        files: '^journals/.*ledger'
+        verbose: true  # outputs log of test run
+        pass_filenames: false  # do not pass files as arguments to to the script
+
+      - id: ledger-report-unsorted-entries
+        name: "ledger: find chronologically unsorted entries in journals"
+        language: system
+        entry: python -m tools.cli.assert_journal_is_sorted
+        files: '^journals/.*ledger'
+        pass_filenames: false  # do not pass files as arguments to to the script
+
+      - id: ledger-report-unsure-accounts
+        name: "ledger: find any 'unsure' account"
+        language: system
+        entry: python -m tools.cli.assert_no_unsure_account_in_journal
+        files: '^journals/.*ledger'
+        pass_filenames: false  # do not pass files as arguments to to the script
+
+      - id: ledger-hiru-expenses-assertions
+        name: "ledger: assert HIRU expenses are healthy"
+        language: system
+        entry: python -m tools.cli.assert_hiru_expenses
+        files: '^journals/.*ledger'
+        pass_filenames: false  # do not pass files as arguments to to the script
+
+      - id: ledger-travel-accounts-in-holidays-days
+        name: "ledger: every travel account has an entry in holidays.csv"
+        language: system
+        entry: python -m tools.cli.assert_travel_accounts_exist_in_holidays_csv
+        files: '^journals/.*ledger'
+        pass_filenames: false  # do not pass files as arguments to to the script
+
+      - id: pytest
+        name: py.test
+        entry: make test
+        language: system
+        files: '^tools/.*\.py'
+        verbose: true  # outputs log of test run
+        pass_filenames: false  # do not pass files as arguments to to the script
+
+      - id: mypy
+        name: typecheck files
+        entry: make lint
+        language: system
+        files: '^tools/.*\.py'
