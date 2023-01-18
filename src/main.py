@@ -267,7 +267,11 @@ def _plot(data: Any, output_path: Path) -> None:
     (vegetables, farmers, harvest) = data
 
     fig, ax = plt.subplots()
-    im = ax.imshow(harvest)
+    im = ax.imshow(
+        harvest,
+        cmap="gray",
+        vmin="0",
+    )
 
     # Show all ticks and label them with the respective list entries
     ax.set_xticks(np.arange(len(farmers)), labels=farmers)
@@ -279,7 +283,9 @@ def _plot(data: Any, output_path: Path) -> None:
     # Loop over data dimensions and create text annotations.
     for i in range(len(vegetables)):
         for j in range(len(farmers)):
-            text = ax.text(j, i, harvest[i, j], ha="center", va="center", color="w")
+            value = harvest[i, j]
+            value_text = f"{value}" if value else "·"
+            text = ax.text(j, i, value_text, ha="center", va="center", color="w")
 
     fig.tight_layout()
     fig.set_size_inches(15, 18)
