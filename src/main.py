@@ -1,16 +1,12 @@
 import datetime
 import json
-import os
-import sys
-import webbrowser
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, TypedDict
 
-import matplotlib.pyplot as plt
 import numpy as np
 
-ONE_DAY = datetime.timedelta(days=1)
+from src.dates import DateRange, one_day
 
 ActivityId = str
 ActivityName = str
@@ -92,7 +88,7 @@ def compute_dates(history: list[CompletedActivity]) -> list[datetime.date]:
 
     dates: list[datetime.date] = [min_date]
     while True:
-        next_day = dates[-1] + ONE_DAY
+        next_day = dates[-1] + one_day()
         dates.append(next_day)
         if next_day == max_date:
             break
@@ -252,9 +248,32 @@ def aggregate_data_from_files(paths: list[Path]) -> tuple[Activities, History]:
     return activities, history
 
 
-def read_data(dir: Path) -> tuple[list[ActivityName], list[str], Any]:
+def _filter_data(
+    data: tuple[list[Activities], list[CompletedActivity]], date_range: DateRange
+) -> tuple[list[Activities], list[CompletedActivity]]:
+    activites, history = data
+
+    start, end = date_range
+    # desired_dates = _get_desired_dates(date_range=date_range)
+
+    def _in_date_rage(completed_activity: CompletedActivity) -> bool:
+        date = completed_activity.date.date()
+        return start <= date and date <= end
+
+    updated_history: list = list(filter(_in_date_rage, history))
+    return activites, updated_history
+
+
+def read_data(
+    dir: Path, date_range: DateRange | None = None
+) -> tuple[list[ActivityName], list[str], Any]:
     json_files = find_json_files(dir=dir)
-    activities, history = aggregate_data_from_files(paths=json_files)
+    plot_data = aggregate_data_from_files(paths=json_files)
+
+    if date_range:
+        activities, history = _filter_data(data=plot_data, date_range=date_range)
+    else:
+        activities, history = plot_data
 
     activity_index = {activity.id: activity.name for activity in activities}
 
@@ -288,44 +307,3 @@ def read_data(dir: Path) -> tuple[list[ActivityName], list[str], Any]:
     data_array = np.array(data)
 
     return activity_names, formatted_dates, data_array
-
-
-def _plot(data: Any, output_path: Path) -> None:
-    (vegetables, farmers, harvest) = data
-
-    fig, ax = plt.subplots()
-    im = ax.imshow(
-        harvest,
-        cmap="gray",
-        vmin="0",
-    )
-
-    # Show all ticks and label them with the respective list entries
-    ax.set_xticks(np.arange(len(farmers)), labels=farmers)
-    ax.set_yticks(np.arange(len(vegetables)), labels=vegetables)
-
-    # Rotate the tick labels and set their alignment.
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
-
-    # Loop over data dimensions and create text annotations.
-    for i in range(len(vegetables)):
-        for j in range(len(farmers)):
-            value = harvest[i, j]
-            value_text = f"{value}" if value else "·"
-            text = ax.text(j, i, value_text, ha="center", va="center", color="w")
-
-    fig.tight_layout()
-    fig.set_size_inches(18, 18)
-    fig.savefig(output_path)
-
-    webbrowser.open(f"file://{output_path.absolute()}", new=0)
-
-
-def main() -> None | str:
-    data = read_data(dir=Path(os.environ["FITNESS_DATA_DIR"]))
-    _plot(data=data, output_path=Path("chart.png"))
-    return None
-
-
-if __name__ == "__main__":
-    sys.exit(main())
